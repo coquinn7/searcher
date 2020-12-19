@@ -19,6 +19,13 @@ str_dict = {}
 
 
 def find_hits(file_list, dict1, dict2):
+    """
+     Finds regex/pattern matches in CSV output
+    :param file_list: list of files to search
+    :param dict1: dict containing regex patterns/descriptions
+    :param dict2: dict containing strings/descriptions
+    :return: re compile errors and matches
+    """
     re_errors = []
     matches = []
     total_patterns = len(dict1) + len(dict2)
@@ -116,13 +123,13 @@ if __name__ == '__main__':
     if args.search:
         rgx_file = Path.cwd() / args.search
         if not rgx_file.is_file():
-            sys.exit(f'\nCan\'t find {args.search}. This file should be in the same dir as autoRon.')
+            sys.exit(f'\nCan\'t find {args.search}. This file should be in the same dir as search.py.')
         else:
             with rgx_file.open() as csvfile:
                 reader = csv.reader(csvfile, delimiter=';')
                 try:
                     for row in reader:
-                        if row[0] == '1':  # regex if int(row[0])
+                        if row[0] == '1':  # regex
                             rgx_dict[row[1]] = row[2]
                         elif row[0] == '0':  # simple string
                             str_dict[row[1]] = row[2]
