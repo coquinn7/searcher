@@ -1,11 +1,12 @@
-import re
-from pathlib import Path
 import argparse
 import csv
+import re
 import sys
-from datetime import datetime
-from colorama import init, Fore
+
 from alive_progress import alive_bar
+from colorama import init, Fore
+from datetime import datetime
+from pathlib import Path
 
 init(autoreset=True)
 
