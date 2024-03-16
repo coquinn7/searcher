@@ -1,141 +1,204 @@
+
 import argparse
 import csv
+import multiprocessing
 import re
 import sys
-
-from alive_progress import alive_bar
-from colorama import init, Fore
 from datetime import datetime
 from pathlib import Path
 
-init(autoreset=True)
 
-examples = '''
-python search.py -s \\path\\to\\dir\\withCSVs -o \\path\\to\\out --search (uses default)
-python search.py -s \\path\\to\\dir -o \\path\\to\\out --search yourfile.txt
+class Searcher:
+    """Searcher class for finding patterns in CSV files."""
+    
+    def __init__(self, 
+                 source, 
+                 out, 
+                 search_file='regex.txt'):
+        """
+        Initialize the Searcher class
+        Args:
+            source (str): Full path to directory containing CSV files.
+            out (str): Output directory for CSV with IOC hits.
+            search_file (str): Name of the search file. Default is regex.txt.
+        """
+        self.source = source
+        self.out = out
+        self.search_file = search_file
+        self.rgx_dict = {}
+        self.str_dict = {}
+        self._load_patterns()  # Call load_patterns during initialization
 
-'''
-rgx_dict = {}
-str_dict = {}
+    def _load_patterns(self):
+        """
+        Load patterns from the search file and compile regex.
+        """
+        rgx_file = Path.cwd() / self.search_file
+        if not rgx_file.is_file():
+            sys.exit(f'\nCan\'t find {self.search_file}. This file should be in the same dir as search.py')
+        else:
+            with rgx_file.open() as csvfile:
+                reader = csv.reader(csvfile, delimiter=';')
+                try:
+                    for row in reader:
+                        if any(row):
+                            if row[0] == '1':  # regex
+                                self.rgx_dict[row[1]] = row[2]
+                            elif row[0] == '0':  # simple string
+                                self.str_dict[row[1]] = row[2]
+                except Exception as e:
+                    print(f'\nFormatting issue with row in regex.txt: {e}')
+                    print(f'Please inspect: {row}')
+        self._compile_regex()  # Call compile_regex after loading patterns
 
+    def _compile_regex(self):
+        """
+        Compile regex from rgx_dict and track descriptions.
+        """
+        self.compiled_regex_patterns = {}
 
-def find_hits(file_list, dict1, dict2):
-    """
-     Finds regex/pattern matches in CSV output
-    :param file_list: list of files to search
-    :param dict1: dict containing regex patterns/descriptions
-    :param dict2: dict containing strings/descriptions
-    :return: re compile errors and matches
-    """
-    re_errors = []
-    matches = []
-    total_patterns = len(dict1) + len(dict2)
+        for pattern, description in self.rgx_dict.items():
+            try:
+                compiled_pattern = re.compile(pattern)
+                self.compiled_regex_patterns[pattern] = {'compiled_pattern': compiled_pattern, 'description': description}
+            except re.error as e:
+                print(f'Error compiling regex pattern "{pattern}": {e}')
 
-    print(Fore.LIGHTWHITE_EX + f'Found {len(file_list)} CSV files. Searching using {total_patterns} patterns...\n')
-    with alive_bar(len(file_list), bar='smooth') as bar:
-        for file in file_list:
-            print(Fore.LIGHTWHITE_EX + f'{file.name}' + Fore.LIGHTGREEN_EX)
-            for key, val in dict1.items():
-                # pass on browser history and base64 chars
-                if key == '[a-zA-Z0-9/+=]{500}' and 'history' in file.name.lower():
-                    pass
-                else:
-                    try:
-                        rgx = re.compile(key)
-                    except Exception as e:
-                        re_errors.append(f'{key}: {e}')
-                    else:
-                        with file.open('r', encoding='utf-8', errors='replace') as fh:
-                            for line in fh:
-                                if rgx.search(line):
-                                    row = [file.name, key, val, line]
-                                    matches.append(row)
+    def _find_hits_in_file(self, file):
+        """
+        Find pattern matches in a single CSV file.
+        Args:
+            file (Path): Path to the CSV file.
+        Returns:
+            matches: List of matches found in the file.
+        """
+        matches = []
 
-            for key, val in dict2.items():
+        for key, val in self.compiled_regex_patterns.items():
+            try:
+                compiled_pattern = val['compiled_pattern']
+                description = val['description']
+
+                with file.open('r', encoding='utf-8', errors='replace') as fh:
+                    for line in fh:
+                        if compiled_pattern.search(line):
+                            row = [file.name, key, description, line]
+                            matches.append(row)
+            except Exception as e:
+                print(f'Error processing file "{file}": {e}')
+
+        for key, val in self.str_dict.items():
+            try:
                 with file.open('r', encoding='utf-8', errors='replace') as fh:
                     for line in fh:
                         if key.lower() in line.lower():
                             row = [file.name, key, val, line]
                             matches.append(row)
-            bar()
+            except Exception as e:
+                print(f'Error processing file "{file}": {e}')
 
-    return matches, re_errors
+        return matches
+
+    def find_hits(self):
+        """
+        Searches for hits across multiple files.
+        """
+        search_path = Path(self.source)
+        
+        files = [
+            file 
+            for file in sorted(search_path.rglob('*.csv'), key=lambda file: file.name) 
+            if 'SearchResults' not in file.name
+        ]
+
+        if len(files) > 0:
+            print(f'\nBeginning search. Using {self.search_file} as input file.')
+            pool = multiprocessing.Pool(processes=multiprocessing.cpu_count())  # Use all available CPU cores
+            results = [pool.apply_async(self._find_hits_in_file, (file,)) for file in files]
+            pool.close()
+
+            hits = []
+
+            total_files = len(files)
+            total_patterns = len(self.compiled_regex_patterns) + len(self.str_dict)
+
+            print(f'Found {total_files} CSV files. Searching using {total_patterns} patterns...\n')
+
+            start_time = datetime.now()
+
+            for idx, result in enumerate(results, 1):
+                matches = result.get()
+                hits.extend(matches)
+                self._print_progress_bar(idx, total_files, start_time)
+
+            self._write_csv(hits)
+
+        else:
+            print(f'No CSV files found in {search_path}')
+
+    @staticmethod
+    def _print_progress_bar(iteration, total, start_time):
+        """
+        Print a progress bar showing the search progress.
+        Args:
+        iteration (int): Current iteration.
+        total (int): Total number of iterations.
+        start_time (datetime): Time when the search started.
+        """
+        length = 50
+        percent = ("{0:.1f}").format(100 * (iteration / float(total)))
+        filled_length = int(length * (iteration / total))
+        bar = '█' * filled_length + '-' * (length - filled_length)
+        elapsed_time = datetime.now() - start_time
+        print(f'\r|{bar}| {percent}% Complete | Elapsed Time: {elapsed_time}', end='', flush=True)
+        # Print New Line on Complete
+        if iteration == total:
+            print()
 
 
-def write_csv(hit_list, out_path):
-    """
-    Writes CSV containing pattern matches
-    :param hit_list: matched patterns from regex/string search
-    :param out_path: path to write CSV
-    :return: nothing
-    """
-    dt = datetime.now()
-    outdir = Path(out_path).joinpath('SearchResults')
+    def _write_csv(self, hit_list):
+        """
+        Write the search results to a CSV file.
+        Args:
+            hit_list (list): List of search results.
+        """
+        if not hit_list:
+            print('\nNo hits found. Please come again.')
+            return
+            
+        dt = datetime.now()
+        outdir = Path(self.out) / 'SearchResults'
 
-    if not outdir.exists():
-        outdir.mkdir(parents=True, exist_ok=True)
+        if not outdir.exists():
+            outdir.mkdir(parents=True, exist_ok=True)
 
-    out_file = outdir / f'SearchResults_{dt.strftime("%Y%m%d%H%M%S")}.csv'
-    header = ['Source File', 'Match', 'Description', 'Found in Line']
+        out_file = outdir / f'SearchResults_{dt.strftime("%Y%m%d%H%M%S")}.csv'
+        header = ['Source File', 'Match', 'Description', 'Found in Line']
 
-    with out_file.open('w', newline='', errors='replace') as fh:
-        csv_writer = csv.writer(fh)
-        csv_writer.writerow(header)
+        with out_file.open('w', newline='', errors='replace') as fh:
+            csv_writer = csv.writer(fh)
+            csv_writer.writerow(header)
 
-        for hit in hit_list:
-            csv_writer.writerow(hit)
+            for hit in hit_list:
+                csv_writer.writerow(hit)
 
-    print(
-        Fore.LIGHTRED_EX + f'\nFound {len(hit_list)} hits ' + Fore.LIGHTWHITE_EX + f'Check {out_file.name} for details.')
+        print(f'\nFound {len(hit_list)} hits. Check {out_file.name} for details.')
 
 
 def main():
-    search_path = Path(args.source)
-    # get all CSV files in path, sort on file name.
-    files = [i for i in sorted(search_path.rglob('*.csv'), key=lambda j: j.name) if 'SearchResults' not in i.name]
-
-    if len(files) > 0:
-        print(Fore.LIGHTWHITE_EX + f'\nBeginning search. Using {args.search} as input file.')
-        hit_list, rgx_errors = find_hits(files, rgx_dict, str_dict)
-        rgx_errors = list(set(rgx_errors))
-
-        if len(rgx_errors) > 0:
-            for i in rgx_errors:
-                print(Fore.LIGHTRED_EX + f'[x] ERROR compiling regex: {i}')
-
-        if len(hit_list) > 0:
-            write_csv(hit_list, args.out)
-
-        else:
-            print(Fore.YELLOW + '\nNo matches found.')
-    else:
-        print(Fore.LIGHTRED_EX + f'No CSV files found in {search_path}')
+    """
+    Main function to initiate the search.
+    """
+    searcher = Searcher(args.source, args.out, args.search)
+    searcher.find_hits()
 
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='IOC finder', epilog=examples,
-                                     formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser = argparse.ArgumentParser(description='IOC finder', formatter_class=argparse.RawTextHelpFormatter)
     parser.add_argument('-s', '--source', type=str, required=True,
                         help='Full path to directory containing csv/text files')
     parser.add_argument('-o', '--out', type=str, required=True, help='Output directory for CSV with IOC hits')
     parser.add_argument('--search', type=str, action='store', nargs='?', required=True, const='regex.txt',
                         help=' file to use. must be placed in cwd. Default is regex.txt')
     args = parser.parse_args()
-    if args.search:
-        rgx_file = Path.cwd() / args.search
-        if not rgx_file.is_file():
-            sys.exit(f'\nCan\'t find {args.search}. This file should be in the same dir as search.py.')
-        else:
-            with rgx_file.open() as csvfile:
-                reader = csv.reader(csvfile, delimiter=';')
-                try:
-                    for row in reader:
-                        if row[0] == '1':  # regex
-                            rgx_dict[row[1]] = row[2]
-                        elif row[0] == '0':  # simple string
-                            str_dict[row[1]] = row[2]
-                except Exception as e:
-                    # print(f'\n[x] Formatting issue with regex.txt {e}. Please inspect: {row}')
-                    print(Fore.YELLOW + '\nFormatting issue with row in regex.txt: ' + Fore.LIGHTWHITE_EX + f'{e}')
-                    print(Fore.YELLOW + 'Please inspect: ' + Fore.LIGHTWHITE_EX + f'{row}')
     main()
