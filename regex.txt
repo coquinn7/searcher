@@ -1,11 +1,25 @@
-# Version 20201027
+# Version 2024
 # Use 1 for regex and 0 for simple string search (case insensitive)
 # Format should be: 1;regex;description of regex OR 0;string;description of string
-# Caution on anchoring regex. The script reads each row in output CSVs as a string
-# Comment out any line you don't want used
+# Comment out any line you don't want used.
 #
 #
 ## Suspicious locations and files (work in progress)
+1;(?i)\\PerfLogs(\\|,)[\w-]+\.(exe|ps1|bat|vbs|hta|dll);Suspicious file in C:\PerfLogs
+1;(?i)\\\$Recycle\.bin(\\|,)[\w-]+\.(exe|ps1|bat|vbs|hta|dll);Suspicious file in C:\$Recycle.bin
+1;(?i)\\Intel\\Logs(\\|,)[\w-]+\.(exe|ps1|bat|vbs|hta|dll);Suspicious file in C:\Intel\Logs
+1;(?i)\\Users\\NetworkService(\\|,)[\w-]+\.(exe|ps1|bat|vbs|hta|dll);Suspicious file in C:\Users\NetworkService
+1;(?i)\\Windows\\Fonts(\\|,)[\w-]+\.(exe|ps1|bat|vbs|hta|dll);Suspicious file in C:\Windows\Fonts
+1;(?i)\\Windows\\Debug(\\|,)[\w-]+\.(exe|ps1|bat|vbs|hta|dll);Suspicious file in C:\Windows\Debug
+1;(?i)\\Windows\\Media(\\|,)[\w-]+\.(exe|ps1|bat|vbs|hta|dll);Suspicious file in C:\Windows\Media
+1;(?i)\\Windows\\Help(\\|,)[\w-]+\.(exe|ps1|bat|vbs|hta|dll);Suspicious file in C:\Windows\Help
+1;(?i)\\Windows\\addins(\\|,)[\w-]+\.(exe|ps1|bat|vbs|hta|dll);Suspicious file in C:\Windows\addins
+1;(?i)\\Windows\\repair(\\|,)[\w-]+\.(exe|ps1|bat|vbs|hta|dll);Suspicious file in C:\Windows\repair
+1;(?i)\\Windows\\security(\\|,)[\w-]+\.(exe|ps1|bat|vbs|hta|dll);Suspicious file in C:\Windows\security
+1;(?i).*\\RSA\\MachineKeys(\\|,)[\w-]+\.(exe|ps1|bat|vbs|hta|dll);Suspicious file in MachineKeys
+1;(?i)\\Windows\\system32\\config\\systemprofile(\\|,)[\w-]+\.(exe|ps1|bat|vbs|hta|dll);Suspicious file in C:\Windows\system32\config\systemprofile
+1;(?i)\\Windows\\Tasks(\\|,)[\w-]+\.(exe|ps1|bat|vbs|hta|dll);Suspicious file in C:\Windows\Tasks
+1;(?i)\\Windows\\System32\\Tasks(\\|,)[\w-]+\.(exe|ps1|bat|vbs|hta|dll);Suspicious file in C:\Windows\System32\Tasks
 1;(?i)C:\\Temp(\\|,)[\w-]+\.(exe|ps1|bat|vbs|hta);Suspicious file in C:\Temp
 1;(?i)\\Windows\\Temp(\\|,)[\w-]+\.(exe|ps1|bat|vbs|hta);Suspicious file in C:\Windows\Temp
 1;(?i)\\Users\\.*\\AppData\\Local\\Temp(\\|,)[\w-]+\.exe;Executable in %TEMP%
@@ -14,16 +28,16 @@
 1;(?i)\\ProgramData(\\|,)[\w-]+\.(exe|ps1|bat|vbs|hta);Suspicious file in C:\ProgramData
 1;(?i)\\Users\\Default(\\|,)[\w-]+\.(exe|ps1|bat|vbs|hta);Suspicious file in C:\Users\Default
 1;(?i)\\Users\\Public(\\|,)[\w-]+\.(exe|ps1|bat|vbs|hta);Suspicious in C:\Users\Public
-1;(?i)\\Perflogs(\\|,)[\w-]+\.(exe|ps1|bat|vbs|hta);Suspicious file in C:\Perflogs
+1;(?i)\\Users\\NetworkService(\\|,)[\w-]+\.(exe|ps1|bat|vbs|hta|dll);Suspicious file in C:\Users\NetworkService
 1;(?i)\\Users\\.*\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs\\StartUp\\[\w-]+\.lnk;User LNK file persistence in StartUp
 1;(?i)\\ProgramData\\Microsoft\\Windows\\Start Menu\\Programs\\StartUp(\\|,)[\w-]+\.lnk;LNK file persistence in StartUp
 #
-## Misspelled windows binaries (more to add)
+## Misspelled Windows binaries (more to add)
 1;(scvhost|svch0st|svchosts|svchots|suchost|svchost\.)\.exe;Misspelled svchost.exe
 1;(rundll|rundll64)\.exe;Misspelled rundll32.exe
 1;(dllhot|dllhots|dllhosts)\.exe;Misspelled dllhost.exe
 #
-## PowerShell and Post Exploitation Frameworks
+## PowerShell and Post-Exploitation Frameworks
 1;(?i)\\127\.0\.0\.1\\ADMIN\$\\[\w]{7}\.exe;Cobalt Strike service binary
 1;[a-zA-Z0-9/+=]{500};500+ consecutive Base64 characters
 1;cmd\.exe /c echo [a-z0-9]{6,11} > \\\\.\\pipe\\[a-z0-9]{6};named pipe impersonation privesc
@@ -58,33 +72,7 @@
 1;(?i)WinRar;WinRAR archiver usage
 1;(?i)(\\|,)(WinRAR|wr|rar)\.exe;WinRAR archiver usage
 1;(?i)(\\|,)WinSCP\.exe;WinSCP FTP client usage
-1;(?i)temp-mail\.org;Temp-mail account creation
 1;(?i)pcloud\.com;pCloud exfil
-#
-## Emotet
-1;(?i)(\\|,)[0-9]+\.exe;Possible emotet, all digit EXE
-#
-## Trickbot
-1;(?i)importDll(32|64);TrickBot Modules
-1;(?i)injectDll(32|64);TrickBot Modules
-1;(?i)mailsearcher(32|64);TrickBot Modules
-1;(?i)networkDll(32|64);TrickBot Modules
-1;(?i)NewBCtestnDll(32|64);TrickBot Modules
-1;(?i)psfin(32|64);TrickBot Modules
-1;(?i)pwgrab(32|64);TrickBot Modules
-1;(?i)shareDll(32|64);TrickBot Modules
-1;(?i)tabDll(32|64);TrickBot Modules
-1;(?i)vncDll(32|64);TrickBot Modules
-1;(?i)wormDll(32|64);TrickBot Modules
-1;(?i)systeminfo(32|64);TrickBot Modules
-1;(?i)mwormDll;TrickBot Modules
-1;(?i)mshareDll;TrickBot Modules
-#
-## Maze and Qbot
-1;(?i)\\ProgramData(\\|,)[\w]{7,9}\.[a-z]{3};Qbot IOC
-1;(?i)\\ProgramData(\\|,)[\w-]+\.dll;MAZE IOC DLL in ProgramData
-1;(?i)\\Perflogs(\\|,)[\w-]+\.dll;MAZE IOC DLL in Perflogs
-1;(?i)\\Windows\\Temp(\\|,)[\w-]+\.dll;MAZE IOC DLL in C:\Windows\Temp
 #
 #
 ## Case (add case-specific IOCs here)
